@@ -75,3 +75,5 @@ Compression and image formats:
 
 For 3rd-party licences, see [LICENSE](LICENSE).
 The licencing information is considered to be part of the documentation.
+
+
