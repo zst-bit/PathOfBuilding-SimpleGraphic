@@ -47,7 +47,7 @@ jobs:
         with:
           source-dir: "."
           build-dir: "build"
-          generator: "Visual Studio 17 2022"
+        　generator: "Ninja"
           options: CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake CMAKE_INSTALL_PREFIX="${{ env.INST_DIR }}" VCPKG_TARGET_TRIPLET="${{ env.VCPKG_TARGET_TRIPLET }}"
 
       - name: Build DLL
