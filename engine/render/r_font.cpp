@@ -10,6 +10,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 #include <cmath>
 
 // =======
@@ -29,17 +30,26 @@ struct f_glyph_s {
 
 // Font height info
 struct f_fontHeight_s {
-	r_tex_c* tex;
-	int		height;
-	int		numGlyph;
-	f_glyph_s glyphs[128];
-	f_glyph_s defGlyph{0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0};
+	r_tex_c* tex = nullptr;
+	int		height = 0;
+	int		numGlyph = 0;
+	std::vector<f_glyph_s> glyphs;
+	f_glyph_s defGlyph{ 0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0 };
 
-	f_glyph_s const& Glyph(char ch) const {
-		if ((unsigned char)ch >= numGlyph) {
+	f_glyph_s const& Glyph(char32_t ch) const {
+		if (static_cast<size_t>(ch) >= glyphs.size()) {
 			return defGlyph;
 		}
-		return glyphs[(unsigned char)ch];
+		return glyphs[static_cast<size_t>(ch)];
+	}
+
+	bool HasGlyph(char32_t ch) const {
+		if (static_cast<size_t>(ch) >= glyphs.size()) {
+			return false;
+		}
+
+		const auto& glyph = glyphs[static_cast<size_t>(ch)];
+		return glyph.width != 0 || glyph.spLeft != 0 || glyph.spRight != 0;
 	}
 };
 
@@ -84,18 +94,19 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 		}
 		else if (fh && sscanf(sub.c_str(), "GLYPH %u %u %u %d %d;", &x, &y, &w, &sl, &sr) == 5) {
 			// Add glyph
-			if (fh->numGlyph >= 128) continue;
-			f_glyph_s* glyph = &fh->glyphs[fh->numGlyph++];
-			glyph->tcLeft = (float)x / fh->tex->fileWidth;
-			glyph->tcRight = (float)(x + w) / fh->tex->fileWidth;
-			glyph->tcTop = (float)y / fh->tex->fileHeight;
-			glyph->tcBottom = (float)(y + fh->height) / fh->tex->fileHeight;
-			glyph->width = w;
-			glyph->spLeft = sl;
-			glyph->spRight = sr;
+			f_glyph_s glyph;
+			glyph.tcLeft = (float)x / fh->tex->fileWidth;
+			glyph.tcRight = (float)(x + w) / fh->tex->fileWidth;
+			glyph.tcTop = (float)y / fh->tex->fileHeight;
+			glyph.tcBottom = (float)(y + fh->height) / fh->tex->fileHeight;
+			glyph.width = w;
+			glyph.spLeft = sl;
+			glyph.spRight = sr;
+
+			fh->glyphs.push_back(glyph);
+			fh->numGlyph = (int)fh->glyphs.size();
 		}
 	}
-
 	// Generate mapping of text height to font height
 	fontHeightMap = new int[maxHeight + 1];
 	memset(fontHeightMap, 0, sizeof(int) * (maxHeight + 1));
@@ -146,7 +157,7 @@ int r_font_c::StringWidthInternal(f_fontHeight_s* fh, std::u32string_view str, i
 	auto tofuFont = FindSmallerFontHeight(height, heightIdx, tofuSizeReduction);
 
 	auto measureCodepoint = [](f_fontHeight_s* glyphFh, char32_t cp) {
-		auto& glyph = glyphFh->Glyph((char)(unsigned char)cp);
+		auto& glyph = glyphFh->Glyph(cp);
 		return glyph.width + glyph.spLeft + glyph.spRight;
 	};
 
@@ -157,7 +168,7 @@ int r_font_c::StringWidthInternal(f_fontHeight_s* fh, std::u32string_view str, i
 		if (escLen) {
 			idx += escLen;
 		}
-		else if (ch >= (unsigned)fh->numGlyph) {
+		else if (!fh->HasGlyph(ch)) {
 			auto tofu = BuildTofuString(ch);
 			for (auto cp : tofu) {
 				width += measureCodepoint(tofuFont.fh, cp);
@@ -208,7 +219,7 @@ size_t r_font_c::StringCursorInternal(f_fontHeight_s* fh, std::u32string_view st
 	auto tofuFont = FindSmallerFontHeight(height, heightIdx, tofuSizeReduction);
 
 	auto measureCodepoint = [](f_fontHeight_s* glyphFh, char32_t cp) {
-		auto& glyph = glyphFh->Glyph((char)(unsigned char)cp);
+		auto& glyph = glyphFh->Glyph(cp);
 		return glyph.width + glyph.spLeft + glyph.spRight;
 	};
 
@@ -221,7 +232,7 @@ size_t r_font_c::StringCursorInternal(f_fontHeight_s* fh, std::u32string_view st
 		if (escLen) {
 			I += escLen;
 		}
-		else if (*I >= (unsigned)fh->numGlyph) {
+		else if (!fh->HasGlyph(*I)) {
 			auto tofu = BuildTofuString(*I);
 			for (auto cp : tofu) {
 				x += measureCodepoint(tofuFont.fh, cp);
@@ -376,7 +387,7 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, std::u
 			curTex = fh->tex;
 			renderer->curLayer->Bind(fh->tex);
 		}
-		auto& glyph = fh->Glyph((char)(unsigned char)cp);
+		auto& glyph = fh->Glyph(cp);
 		x += glyph.spLeft * scale;
 		if (glyph.width) {
 			float w = glyph.width * scale;
@@ -396,12 +407,12 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, std::u
 
 	// Render the string
 	for (auto tail = str; !tail.empty();) {
-		// Draw unprintable characters as tofu placeholders
 		auto ch = tail[0];
-		if (ch >= (unsigned)fh->numGlyph) {
+
+		if (!fh->HasGlyph(ch)) {
 			auto tofu = BuildTofuString(ch);
-			for (auto ch : tofu) {
-				drawCodepoint(tofuFont.fh, tofuFont.fh->height, 1.0f, tofuFont.yPad, ch);
+			for (auto cp : tofu) {
+				drawCodepoint(tofuFont.fh, tofuFont.fh->height, 1.0f, tofuFont.yPad, cp);
 			}
 			tail = tail.substr(1);
 			continue;
