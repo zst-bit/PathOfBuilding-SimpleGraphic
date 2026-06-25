@@ -42,14 +42,16 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
       - name: Obtain and run CMake
         uses: threeal/cmake-action@v1.3.0
         with:
           source-dir: "."
           build-dir: "build"
-        　generator: "Ninja"
+          generator: "Ninja"
           options: CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake CMAKE_INSTALL_PREFIX="${{ env.INST_DIR }}" VCPKG_TARGET_TRIPLET="${{ env.VCPKG_TARGET_TRIPLET }}"
-
       - name: Build DLL
         run: "cmake --build build --config Release -t INSTALL"
 
