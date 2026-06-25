@@ -53,7 +53,7 @@ jobs:
           generator: "Ninja"
           options: CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake CMAKE_INSTALL_PREFIX="${{ env.INST_DIR }}" VCPKG_TARGET_TRIPLET="${{ env.VCPKG_TARGET_TRIPLET }}"
       - name: Build DLL
-        run: "cmake --build build --config Release -t INSTALL"
+        run: cmake --build build --target install
 
       - name: Show DLL resources
         run: |
