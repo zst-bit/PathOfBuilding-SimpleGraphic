@@ -11,6 +11,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <cstdlib>
 #include <cmath>
 
 // =======
@@ -79,49 +80,39 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 	// Parse info file
 	std::string sub;
 	while (std::getline(tgf, sub)) {
-		unsigned h = 0;
-		unsigned x = 0;
-		unsigned y = 0;
-		unsigned w = 0;
-		int sl = 0;
-		int sr = 0;
-
+		int h, x, y, w, sl, sr;
 		if (sscanf(sub.c_str(), "HEIGHT %u;", &h) == 1) {
 			// New height
 			fh = new f_fontHeight_s;
 			fontHeights[numFontHeight++] = fh;
 			std::string tgaName = fmt::format("{}.{}.tga", fileNameBase, h);
 			fh->tex = new r_tex_c(renderer->texMan, tgaName.c_str(), TF_NOMIPMAP);
-			fh->height = static_cast<int>(h);
-			if (fh->height > maxHeight) {
-				maxHeight = fh->height;
+			fh->height = h;
+			if (h > maxHeight) {
+				maxHeight = h;
 			}
 			fh->numGlyph = 0;
 		}
 		else if (fh && sscanf(sub.c_str(), "GLYPH %u %u %u %d %d;", &x, &y, &w, &sl, &sr) == 5) {
-			// Add glyph.
-			//
-			// New Japanese-capable font files append a Unicode codepoint after the glyph data:
-			//   GLYPH ...;      // 12484
-			// Old ASCII-only font files do not have that comment, so they fall back to the
-			// original sequential index.
+			// Add glyph. If the line has a trailing "// 12345" comment,
+			// use that value as the Unicode codepoint. Otherwise, keep old sequential behavior.
 			unsigned cp = static_cast<unsigned>(fh->numGlyph);
-			const size_t commentPos = sub.find("//");
+			size_t commentPos = sub.find("//");
 			if (commentPos != std::string::npos) {
-				try {
-					cp = static_cast<unsigned>(std::stoul(sub.substr(commentPos + 2)));
-				}
-				catch (...) {
-					cp = static_cast<unsigned>(fh->numGlyph);
+				const char* comment = sub.c_str() + commentPos + 2;
+				char* endPtr = nullptr;
+				unsigned long parsed = std::strtoul(comment, &endPtr, 10);
+				if (endPtr != comment) {
+					cp = static_cast<unsigned>(parsed);
 				}
 			}
 
 			f_glyph_s glyph;
-			glyph.tcLeft = static_cast<float>(x) / fh->tex->fileWidth;
-			glyph.tcRight = static_cast<float>(x + w) / fh->tex->fileWidth;
-			glyph.tcTop = static_cast<float>(y) / fh->tex->fileHeight;
-			glyph.tcBottom = static_cast<float>(y + static_cast<unsigned>(fh->height)) / fh->tex->fileHeight;
-			glyph.width = static_cast<int>(w);
+			glyph.tcLeft = (float)x / fh->tex->fileWidth;
+			glyph.tcRight = (float)(x + w) / fh->tex->fileWidth;
+			glyph.tcTop = (float)y / fh->tex->fileHeight;
+			glyph.tcBottom = (float)(y + fh->height) / fh->tex->fileHeight;
+			glyph.width = w;
 			glyph.spLeft = sl;
 			glyph.spRight = sr;
 
