@@ -79,8 +79,12 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 	// Parse info file
 	std::string sub;
 	while (std::getline(tgf, sub)) {
-		int h, x, y, w, sl, sr;
-		unsigned cp;
+		unsigned h = 0;
+		unsigned x = 0;
+		unsigned y = 0;
+		unsigned w = 0;
+		int sl = 0;
+		int sr = 0;
 
 		if (sscanf(sub.c_str(), "HEIGHT %u;", &h) == 1) {
 			// New height
@@ -88,20 +92,36 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 			fontHeights[numFontHeight++] = fh;
 			std::string tgaName = fmt::format("{}.{}.tga", fileNameBase, h);
 			fh->tex = new r_tex_c(renderer->texMan, tgaName.c_str(), TF_NOMIPMAP);
-			fh->height = h;
-			if (h > maxHeight) {
-				maxHeight = h;
+			fh->height = static_cast<int>(h);
+			if (fh->height > maxHeight) {
+				maxHeight = fh->height;
 			}
 			fh->numGlyph = 0;
 		}
-		else if (fh && sscanf(sub.c_str(), "GLYPH %u %u %u %d %d; // %u", &x, &y, &w, &sl, &sr, &cp) == 6) {
-			// Add glyph with Unicode codepoint
+		else if (fh && sscanf(sub.c_str(), "GLYPH %u %u %u %d %d;", &x, &y, &w, &sl, &sr) == 5) {
+			// Add glyph.
+			//
+			// New Japanese-capable font files append a Unicode codepoint after the glyph data:
+			//   GLYPH ...;      // 12484
+			// Old ASCII-only font files do not have that comment, so they fall back to the
+			// original sequential index.
+			unsigned cp = static_cast<unsigned>(fh->numGlyph);
+			const size_t commentPos = sub.find("//");
+			if (commentPos != std::string::npos) {
+				try {
+					cp = static_cast<unsigned>(std::stoul(sub.substr(commentPos + 2)));
+				}
+				catch (...) {
+					cp = static_cast<unsigned>(fh->numGlyph);
+				}
+			}
+
 			f_glyph_s glyph;
-			glyph.tcLeft = (float)x / fh->tex->fileWidth;
-			glyph.tcRight = (float)(x + w) / fh->tex->fileWidth;
-			glyph.tcTop = (float)y / fh->tex->fileHeight;
-			glyph.tcBottom = (float)(y + fh->height) / fh->tex->fileHeight;
-			glyph.width = w;
+			glyph.tcLeft = static_cast<float>(x) / fh->tex->fileWidth;
+			glyph.tcRight = static_cast<float>(x + w) / fh->tex->fileWidth;
+			glyph.tcTop = static_cast<float>(y) / fh->tex->fileHeight;
+			glyph.tcBottom = static_cast<float>(y + static_cast<unsigned>(fh->height)) / fh->tex->fileHeight;
+			glyph.width = static_cast<int>(w);
 			glyph.spLeft = sl;
 			glyph.spRight = sr;
 
@@ -109,20 +129,6 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 				fh->glyphs.resize(static_cast<size_t>(cp) + 1);
 			}
 			fh->glyphs[static_cast<size_t>(cp)] = glyph;
-			fh->numGlyph = static_cast<int>(fh->glyphs.size());
-		}
-		else if (fh && sscanf(sub.c_str(), "GLYPH %u %u %u %d %d;", &x, &y, &w, &sl, &sr) == 5) {
-			// Fallback for old ASCII-only font files
-			f_glyph_s glyph;
-			glyph.tcLeft = (float)x / fh->tex->fileWidth;
-			glyph.tcRight = (float)(x + w) / fh->tex->fileWidth;
-			glyph.tcTop = (float)y / fh->tex->fileHeight;
-			glyph.tcBottom = (float)(y + fh->height) / fh->tex->fileHeight;
-			glyph.width = w;
-			glyph.spLeft = sl;
-			glyph.spRight = sr;
-
-			fh->glyphs.push_back(glyph);
 			fh->numGlyph = static_cast<int>(fh->glyphs.size());
 		}
 	}
