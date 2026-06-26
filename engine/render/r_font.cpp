@@ -80,6 +80,8 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 	std::string sub;
 	while (std::getline(tgf, sub)) {
 		int h, x, y, w, sl, sr;
+		unsigned cp;
+
 		if (sscanf(sub.c_str(), "HEIGHT %u;", &h) == 1) {
 			// New height
 			fh = new f_fontHeight_s;
@@ -92,8 +94,25 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 			}
 			fh->numGlyph = 0;
 		}
+		else if (fh && sscanf(sub.c_str(), "GLYPH %u %u %u %d %d; // %u", &x, &y, &w, &sl, &sr, &cp) == 6) {
+			// Add glyph with Unicode codepoint
+			f_glyph_s glyph;
+			glyph.tcLeft = (float)x / fh->tex->fileWidth;
+			glyph.tcRight = (float)(x + w) / fh->tex->fileWidth;
+			glyph.tcTop = (float)y / fh->tex->fileHeight;
+			glyph.tcBottom = (float)(y + fh->height) / fh->tex->fileHeight;
+			glyph.width = w;
+			glyph.spLeft = sl;
+			glyph.spRight = sr;
+
+			if (fh->glyphs.size() <= cp) {
+				fh->glyphs.resize(static_cast<size_t>(cp) + 1);
+			}
+			fh->glyphs[static_cast<size_t>(cp)] = glyph;
+			fh->numGlyph = static_cast<int>(fh->glyphs.size());
+		}
 		else if (fh && sscanf(sub.c_str(), "GLYPH %u %u %u %d %d;", &x, &y, &w, &sl, &sr) == 5) {
-			// Add glyph
+			// Fallback for old ASCII-only font files
 			f_glyph_s glyph;
 			glyph.tcLeft = (float)x / fh->tex->fileWidth;
 			glyph.tcRight = (float)(x + w) / fh->tex->fileWidth;
@@ -104,7 +123,7 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 			glyph.spRight = sr;
 
 			fh->glyphs.push_back(glyph);
-			fh->numGlyph = (int)fh->glyphs.size();
+			fh->numGlyph = static_cast<int>(fh->glyphs.size());
 		}
 	}
 	// Generate mapping of text height to font height
